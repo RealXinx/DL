@@ -1,0 +1,41 @@
+import torch
+'''----------------------------------------------------------------------------------------------'''
+# 假如在创建一个模型时不想用系统自动生成的参数
+# 那么就要用自己的参数
+# 但是自己的参数，系统无法识别其是parameter，所以在优化的时候无法优化
+# 所以要用到parameter方法
+class my_linear(torch.nn.Module):
+    def __init__(self, input_size, output_size):
+        super(my_linear, self).__init__()
+        data = torch.randn(input_size, output_size, dtype=torch.float32)
+        self.my_weight = torch.nn.Parameter(data)
+
+    def forward(self, x):
+        y = x @ self.my_weight
+        return y
+'''----------------------------------------------------------------------------------------------'''
+# 输入的x的形状是(2, 2, 4)
+# 想通过自己创造的linear函数将其变成(2, 2, 1)
+linear = my_linear(4,1)
+'''----------------------------------------------------------------------------------------------'''
+criterion = torch.nn.MSELoss()
+optimizer = torch.optim.Adam(linear.parameters(), lr=0.05)
+'''----------------------------------------------------------------------------------------------'''
+input_data = torch.tensor(
+    [[[1,3,5,7],
+      [2,4,6,8]],
+     [[2,4,6,8],
+      [1,3,5,7]]], dtype=torch.float32)
+
+target_data = torch.tensor(
+    [[[1],[2]],[[3],[4]]], dtype=torch.float32)
+'''----------------------------------------------------------------------------------------------'''
+for i in range(100):
+    y = linear(input_data)
+    loss = criterion(y, target_data)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+print(y)
