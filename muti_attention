@@ -1,0 +1,67 @@
+import torch
+import math
+'''----------------------------------------------------------------------------------------------'''
+batch = 3
+# Q的形状是(batch, n_q, d_q)
+n_q = 10
+d_q = 80
+Q = torch.randn((batch, n_q, d_q))
+# K的形状是(batch, n_k, d_k)
+n_k = 15
+d_k = 72
+K = torch.randn((batch, n_k, d_k))
+# V的形状是(batch, n_v, d_v)
+n_v = n_k # 考虑到矩阵乘法，k和v的n必须一样
+d_v = 98
+V = torch.randn((batch, n_v, d_v))
+
+d_out = 64
+head = 8
+'''----------------------------------------------------------------------------------------------'''
+class Multi_Head_Attention(torch.nn.Module):
+    def __init__(self, d_q, d_k, d_v, d_out, head):
+        super(Multi_Head_Attention, self).__init__()
+        # 多头注意力机制的分割方法是把原来的d分成head个小d即可
+        self.d_out = d_out
+        self.head = head
+        self.d_little = d_out // head
+        # 一般来说，传入的qkv的d和多头注意力机制里的qkv的d是不一样的，所以需要把d_in变成d_out
+        self.w_q = torch.nn.Linear(d_q, d_out)
+        self.w_k = torch.nn.Linear(d_k, d_out)
+        self.w_v = torch.nn.Linear(d_v, d_out)
+        self.combine = torch.nn.Linear(d_out, d_out)
+
+    def forward(self, Q, K, V):
+        batch = Q.shape[0]
+
+        q = self.w_q(Q)
+        k = self.w_k(K)
+        v = self.w_v(V)
+
+        # 多头分割 (batch, n~, d_out) 变成 (batch, n~, head, d_little)
+        # 维度转换 (batch, head, n~, d_little)
+        q = q.view(batch, -1, self.head, self.d_little).permute(0, 2, 1, 3)
+        k = k.view(batch, -1, self.head, self.d_little).permute(0, 2, 1, 3)
+        v = v.view(batch, -1, self.head, self.d_little).permute(0, 2, 1, 3)
+
+        # (batch, head, n_q, n_k)
+        scores = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(self.d_little)
+        attention = torch.nn.functional.softmax(scores, dim=-1)
+        # (batch, head, n_q, d_little)
+        output = torch.matmul(attention, v)
+        # (batch, n_q, head, d_little)
+        # 很多对张量的维度上面的变化都是需要连续内存的，所以需要contiguous
+        output = output.permute(0, 2, 1, 3).contiguous()
+        # (batch, n_q, d_out)
+        output = output.view(batch, -1, self.d_out)
+
+        output = self.combine(output)
+
+        return output
+    
+module = Multi_Head_Attention(d_q, d_k, d_v, d_out, head)
+'''----------------------------------------------------------------------------------------------'''
+ouput = module(Q, K, V)
+print(ouput.shape)
+
+'''对于自注意力, qkv将变成输入x, 并且输入和输出的d的大小都一样'''
